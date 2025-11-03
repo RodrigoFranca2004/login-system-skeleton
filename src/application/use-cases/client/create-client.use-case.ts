@@ -1,43 +1,47 @@
 import { IClientRepository } from "@domain/repositories/IClientRepository";
 import { ClientOutputDTO, CreateClientInputDTO } from "../../dtos/client.dto";
-import { inject, injectable } from "tsyringe";
-
-/**
- * CreateClientUseCase
- *
- * This class orchestrates the creation of a new client.
- * It contains the application-specific logic for this operation.
- */
+import { BusinessRuleError } from "@application/errors/application-errors";
+import { injectable, inject } from "tsyringe";
+import { IMessageBroker } from "@application/providers/IMessageBroker";
 @injectable()
 export class CreateClientUseCase {
-  // The use case depends on the repository *interface* (Dependency Inversion)
+  private readonly CLIENT_EXCHANGE = "client.events";
+  private readonly CLIENT_CREATED_ROUTING_KEY = "client.created";
+
   constructor(
     @inject("IClientRepository")
-    private clientRepository: IClientRepository
+    private clientRepository: IClientRepository,
+
+    @inject("IMessageBroker")
+    private messageBroker: IMessageBroker
   ) {}
 
-  /**
-   * Executes the use case.
-   * @param input - The DTO containing the data for the new client.
-   * @returns A DTO with the newly created client's data.
-   */
   async execute(input: CreateClientInputDTO): Promise<ClientOutputDTO> {
-    // --- Step 1: Application-specific validation ---
-    // (This is business logic that doesn't belong in the entity,
-    // like checking for uniqueness before attempting to create)
-
     const emailExists = await this.clientRepository.findByEmail(input.email);
     if (emailExists) {
-      // NOTE: For an internal-facing service, this specific error is good UX.
-      // For a public-facing API, this would be a user enumeration risk.
-      throw new Error("A client with this email already exists.");
+      throw new BusinessRuleError("A client with this email already exists.");
     }
 
-    // --- Step 2: Persist via the repository ---
     const newClient = await this.clientRepository.create(input);
 
-    // --- Step 3: Map to Output DTO and return ---
-    // This ensures we only return the "safe" data to the outside world.
+    try {
+      await this.messageBroker.publish(
+        this.CLIENT_EXCHANGE,
+        this.CLIENT_CREATED_ROUTING_KEY,
+        {
+          id: newClient.id,
+          name: newClient.name,
+          email: newClient.email,
+        }
+      );
+      console.log('[MESSAGE_BROKER] "client.created" event published.');
+    } catch (err) {
+      console.error(
+        '[MESSAGE_BROKER] Failed to publish "client.created" event.',
+        err
+      );
+    }
+
     const output: ClientOutputDTO = {
       id: newClient.id,
       name: newClient.name,
