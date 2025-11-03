@@ -1,0 +1,80 @@
+# Defines the collection of services, networks, and volumes for the application
+services:
+
+  # --- Client API Service (Node.js) ---
+  app:
+    # Build the container image from the Dockerfile in the current directory ('.')
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: client_api
+    ports:
+      # Map the host's port 3000 to the container's port 3000
+      # <HOST_PORT>:<CONTAINER_PORT>
+      - "3000:3000"
+    environment:
+      # Environment variables injected into the service.
+      NODE_ENV: production
+      PORT: 3000
+      MONGO_URI: mongodb://root:example@mongo:27017/client-db?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URI: amqp://guest:guest@rabbitmq:5672
+    
+    # 'depends_on' ensures that the specified services are started before this service.
+    # This does not wait for them to be "ready", just "started".
+    depends_on:
+      - mongo
+      - redis
+      - rabbitmq
+    
+    # Automatically restart the container if it crashes.
+    restart: always
+
+  # --- MongoDB Service ---
+  mongo:
+    image: mongo:latest # Use the official 'mongo' image from Docker Hub
+    container_name: mongo_db
+    ports:
+      # Map the host port for external access (e.g., MongoDB Compass)
+      - "27017:27017"
+    environment:
+      # Set credentials for the database (must match the MONGO_URI above)
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      # Use a named volume ('mongo_data') to persist database files
+      # This ensures data is not lost when the container is stopped or removed.
+      - mongo_data:/data/db
+    restart: always
+
+  # --- Redis Service ---
+  redis:
+    image: redis:alpine # Use the lightweight 'alpine' variant of the Redis image
+    container_name: redis_cache
+    ports:
+      # Map the host port for debugging or external tools
+      - "6379:6379"
+    volumes:
+      # Use a named volume ('redis_data') to persist cache data (if needed)
+      - redis_data:/data
+    restart: always
+
+  # --- RabbitMQ Service ---
+  rabbitmq:
+    # Use the official image with the '-management' tag
+    # This includes the web-based UI (on port 15672)
+    image: rabbitmq:3-management 
+    container_name: rabbitmq_broker
+    ports:
+      # Map the AMQP port (for the application)
+      - "5672:5672"
+      # Map the Management UI port (for the browser: http://localhost:15672)
+      - "15672:15672"
+    restart: always
+
+# Top-level 'volumes' declaration
+# This tells Docker to create and manage the named volumes.
+volumes:
+  mongo_data: {}
+  redis_data: {}
