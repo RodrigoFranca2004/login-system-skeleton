@@ -2,7 +2,7 @@ import { IClientRepository } from "@domain/repositories/IClientRepository";
 import { ClientOutputDTO } from "../../dtos/client.dto";
 import { ResourceNotFoundError } from "../../errors/application-errors";
 import { injectable, inject } from "tsyringe";
-import { ICacheProvider } from "@application/providers/ICacheProvider"; 
+import { ICacheProvider } from "@application/providers/ICacheProvider";
 
 @injectable()
 export class GetClientByIdUseCase {
@@ -24,7 +24,13 @@ export class GetClientByIdUseCase {
 
       if (cachedData) {
         console.log("[CACHE] Hit! Serving from cache.");
-        return JSON.parse(cachedData) as ClientOutputDTO;
+
+        const cachedDTO = JSON.parse(cachedData);
+
+        cachedDTO.createdAt = new Date(cachedDTO.createdAt);
+        cachedDTO.updatedAt = new Date(cachedDTO.updatedAt);
+        
+        return cachedDTO as ClientOutputDTO;
       }
     } catch (error) {
       console.warn("[CACHE] Failed to retrieve from cache.", error);
